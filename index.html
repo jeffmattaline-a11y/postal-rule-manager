@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Postal Rule Lookup</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f4f5f7;color:#1a1a2e;display:flex;flex-direction:column}
+
+/* LOGIN */
+#loginScreen{position:fixed;inset:0;background:#1c1c1e;display:flex;align-items:center;justify-content:center;z-index:1000}
+.login-box{background:#fff;border-radius:14px;padding:40px 44px;width:360px;box-shadow:0 12px 48px rgba(0,0,0,.4);text-align:center}
+.login-logo{font-size:36px;margin-bottom:8px}
+.login-box h1{font-size:18px;font-weight:700;color:#1a1a2e;margin-bottom:4px}
+.login-box p{font-size:12px;color:#888;margin-bottom:24px}
+.login-box input{width:100%;padding:10px 14px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;outline:none;margin-bottom:12px;letter-spacing:.1em;transition:border-color .2s}
+.login-box input:focus{border-color:#1a1a2e}
+.login-submit{width:100%;padding:11px;background:#1a1a2e;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer}
+.login-submit:hover{background:#2563eb}
+.login-error{font-size:12px;color:#c62828;margin-top:10px;min-height:18px}
+
+/* HEADER */
+.header{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);color:#fff;padding:1.25rem 2rem;box-shadow:0 2px 12px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;flex-shrink:0}
+.header-left h1{font-size:1.3rem;font-weight:700;letter-spacing:.02em;margin-bottom:.15rem}
+.header-left p{font-size:.78rem;opacity:.55}
+.mode-tabs{display:flex;gap:4px;background:rgba(255,255,255,.1);border-radius:10px;padding:4px}
+.mode-tab{padding:.4rem 1rem;border-radius:7px;font-size:.82rem;font-weight:600;cursor:pointer;border:none;background:transparent;color:rgba(255,255,255,.65);transition:all .15s;white-space:nowrap}
+.mode-tab.active{background:#fff;color:#1a1a2e}
+.mode-tab:hover:not(.active){color:#fff;background:rgba(255,255,255,.15)}
+
+/* VIEWS */
+.view{display:none;flex:1;min-height:0;flex-direction:column}
+.view.active{display:flex}
+
+/* UPLOAD VIEW */
+.upload-view{padding:2rem;overflow-y:auto;gap:1.5rem}
+.upload-section{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:1.5rem 2rem}
+.upload-section h2{font-size:1rem;font-weight:700;color:#1e3a5f;margin-bottom:.35rem}
+.upload-section p{font-size:.82rem;color:#6b7280;margin-bottom:1.25rem;line-height:1.5}
+.drop-zone{border:2px dashed #d0d5dd;border-radius:10px;padding:2rem 1.5rem;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:#fafafa}
+.drop-zone:hover,.drop-zone.drag-over{border-color:#3b82f6;background:#eff6ff}
+.drop-zone .drop-icon{font-size:2rem;margin-bottom:.5rem}
+.drop-zone p{font-size:.82rem;color:#6b7280;margin:0}
+.drop-zone strong{color:#374151}
+.upload-btn-row{display:flex;align-items:center;gap:.75rem;margin-top:.75rem;flex-wrap:wrap}
+.upload-btn{padding:.5rem 1.25rem;background:#1a1a2e;color:#fff;border:none;border-radius:7px;font-size:.82rem;font-weight:700;cursor:pointer}
+.upload-btn:hover{background:#2563eb}
+.upload-status{font-size:.8rem;min-height:1.2rem}
+.upload-status.ok{color:#166534}
+.upload-status.err{color:#c62828}
+.loaded-list{margin-top:1rem;display:flex;flex-wrap:wrap;gap:.4rem}
+.loaded-tag{background:#dbeafe;color:#1d4ed8;font-size:.72rem;font-weight:700;padding:.2rem .6rem;border-radius:5px;font-family:monospace}
+.loaded-tag.cov-tag{background:#dcfce7;color:#166534}
+.clear-btn{padding:.3rem .8rem;border:1px solid #fca5a5;border-radius:5px;background:transparent;color:#b91c1c;cursor:pointer;font-size:.75rem;margin-left:auto}
+.clear-btn:hover{background:#fef2f2}
+
+/* BROWSER LAYOUT */
+.browser{display:flex;flex:1;min-height:0;overflow:hidden}
+.sidebar{width:230px;flex-shrink:0;background:#fff;border-right:1px solid #e5e7eb;overflow-y:auto;padding:.75rem 0}
+.sidebar-label{font-size:.66rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.09em;padding:.5rem 1rem .3rem}
+.side-btn{display:flex;align-items:center;justify-content:space-between;width:100%;padding:.5rem 1rem;background:none;border:none;text-align:left;cursor:pointer;font-size:.82rem;font-weight:500;color:#374151;transition:background .12s;border-left:3px solid transparent}
+.side-btn:hover{background:#f3f4f6}
+.side-btn.active{background:#eff6ff;color:#1d4ed8;border-left-color:#3b82f6;font-weight:700}
+.side-btn .sub{font-size:.7rem;color:#9ca3af;font-weight:400;white-space:nowrap}
+.side-btn.active .sub{color:#93c5fd}
+.side-search{padding:0 .5rem .4rem}
+.side-search input{width:100%;padding:.35rem .6rem;border:1px solid #e5e7eb;border-radius:6px;font-size:.76rem;outline:none}
+.side-search input:focus{border-color:#3b82f6}
+.detail{flex:1;overflow-y:auto;padding:1.25rem 1.5rem;background:#f4f5f7}
+.detail-placeholder{display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:.75rem;color:#9ca3af}
+.detail-placeholder .icon{font-size:3rem}
+
+/* ZIP SEARCH VIEW */
+.zip-view{padding:1.5rem 2rem;overflow-y:auto}
+.search-row{display:flex;gap:.75rem;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap}
+.search-row input{padding:.6rem 1rem;border:1.5px solid #d0d5dd;border-radius:8px;font-size:1rem;letter-spacing:.05em;outline:none;width:200px;transition:border-color .2s}
+.search-row input:focus{border-color:#3b82f6}
+.search-row button{padding:.6rem 1.25rem;background:#1a1a2e;color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer}
+.search-row button:hover{background:#2563eb}
+
+/* CARDS */
+.result-head{background:#fff;border-radius:12px 12px 0 0;border:1px solid #e5e7eb;border-bottom:none;padding:1.1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem}
+.result-head h2{font-size:1.4rem;font-weight:700;color:#111827}
+.result-head p{font-size:.85rem;color:#6b7280;margin-top:2px}
+.card{background:#fff;border:1px solid #e5e7eb;border-top:2px solid #3b82f6;margin-top:1rem;border-radius:12px;overflow:hidden}
+.card-head{padding:.85rem 1.25rem;background:#f8fafc;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap}
+.card-title{font-size:.9rem;font-weight:700;color:#1e3a5f}
+.toggle-btn{font-size:.76rem;color:#2563eb;cursor:pointer;background:none;border:1px solid #bfdbfe;border-radius:6px;padding:.22rem .6rem;font-weight:600}
+.toggle-btn:hover{background:#eff6ff}
+.all-row{display:flex;align-items:center;gap:.75rem;padding:.8rem 1.5rem;border-bottom:1px solid #e5e7eb;background:#fafafa}
+.all-lbl{font-size:.78rem;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;min-width:80px}
+.legend-row{display:flex;gap:1.25rem;flex-wrap:wrap;padding:.5rem 1.5rem;background:#fafafa;border-top:1px solid #e5e7eb}
+.legend-item{display:flex;align-items:center;gap:.35rem;font-size:.72rem;color:#9ca3af}
+.dot{width:7px;height:7px;border-radius:50%}
+.dot-off{background:#ef4444}.dot-lim{background:#f59e0b}.dot-ok{background:#d1d5db}
+
+/* CLASS TABLE */
+.tbl-wrap{width:100%;overflow-x:auto}
+.cls-tbl{border-collapse:collapse;table-layout:auto;width:100%}
+.cls-tbl th{font-size:.62rem;font-weight:700;color:#9ca3af;letter-spacing:.06em;font-family:monospace;text-align:center;padding:.4rem .45rem .3rem;background:#fafafa;border-right:1px solid #f0f0f0;border-bottom:2px solid #e5e7eb;white-space:nowrap}
+.cls-tbl td{text-align:center;padding:.5rem .45rem;border-right:1px solid #f0f0f0;font-size:.78rem;font-weight:600;white-space:nowrap;min-width:40px}
+.cls-tbl th:last-child,.cls-tbl td:last-child{border-right:none}
+.val-off{color:#b91c1c}.val-lim{color:#b45309}
+
+/* PILL BADGES */
+.pill{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;font-weight:700;padding:.25rem .65rem;border-radius:20px}
+.pill-off{background:#fef2f2;color:#b91c1c;border:1px solid #fca5a5}
+.pill-limit{background:#fffbeb;color:#92400e;border:1px solid #fcd34d}
+.pill-ok{background:#f0fdf4;color:#166534;border:1px solid #86efac}
+.badge-enabled{font-size:.68rem;font-weight:700;color:#166534;background:#dcfce7;padding:.1rem .4rem;border-radius:4px;white-space:nowrap}
+.badge-disabled{font-size:.68rem;font-weight:700;color:#6b7280;background:#f3f4f6;padding:.1rem .4rem;border-radius:4px;white-space:nowrap}
+.badge-rule{background:#1e3a5f;color:#93c5fd;font-size:.72rem;font-weight:700;padding:.25rem .75rem;border-radius:20px}
+.rule-count-badge{background:#1e3a5f;color:#93c5fd;font-size:.72rem;font-weight:700;padding:.25rem .75rem;border-radius:20px;white-space:nowrap}
+
+/* CODES GRID */
+.tbl-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;margin-top:1rem;overflow:hidden}
+.tbl-card-head{padding:.75rem 1.25rem;background:#f8fafc;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap}
+.tbl-card-head h3{font-size:.87rem;font-weight:700;color:#1e3a5f}
+.filter-input{padding:.3rem .65rem;border:1px solid #d0d5dd;border-radius:6px;font-size:.78rem;outline:none;width:175px}
+.filter-input:focus{border-color:#3b82f6}
+.codes-grid-lg{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:.4rem;padding:1rem 1.25rem}
+.code-item{background:#f8fafc;border:1px solid #e5e7eb;border-radius:7px;padding:.4rem .65rem;display:flex;align-items:center;gap:.4rem;cursor:pointer;transition:background .1s}
+.code-item:hover{background:#eff6ff;border-color:#bfdbfe}
+.code-name{font-size:.76rem;font-weight:700;color:#1e3a5f;font-family:monospace;min-width:72px}
+.code-desc{font-size:.72rem;color:#4b5563;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tbl-scroll{overflow-x:auto;max-height:380px;overflow-y:auto}
+table.list{width:100%;border-collapse:collapse;font-size:.8rem}
+table.list thead th{position:sticky;top:0;background:#f1f5f9;padding:.45rem .85rem;text-align:left;font-size:.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;border-bottom:2px solid #e5e7eb;white-space:nowrap}
+table.list tbody tr{border-bottom:1px solid #f3f4f6;cursor:pointer;transition:background .1s}
+table.list tbody tr:hover{background:#eff6ff}
+table.list tbody td{padding:.45rem .85rem;color:#374151;white-space:nowrap}
+table.list td.mono{font-weight:700;font-family:monospace;color:#1d4ed8}
+.no-data{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:2rem;text-align:center;color:#9ca3af;font-size:.85rem;font-style:italic}
+
+/* TIER GRID */
+.tier-grid-wrap{background:#fff;border:1px solid #e5e7eb;border-radius:12px;margin-top:1rem;overflow:hidden}
+.tier-grid-head{padding:.7rem 1.25rem;background:#f8fafc;border-bottom:1px solid #e5e7eb;font-size:.85rem;font-weight:700;color:#1e3a5f}
+.tier-grid-inner{overflow-x:auto;padding:.75rem 1.25rem 1rem}
+.tier-tbl{border-collapse:collapse;font-size:.76rem;min-width:420px}
+.tier-tbl th{padding:.32rem .55rem;text-align:center;font-size:.65rem;font-weight:700;letter-spacing:.04em;white-space:nowrap;border:1px solid #e5e7eb}
+.tier-tbl td{padding:.28rem .45rem;text-align:center;border:1px solid #e5e7eb;min-width:48px}
+.tier-tbl td.row-lbl{text-align:left;font-weight:700;font-size:.73rem;color:#374151;padding-left:.65rem;white-space:nowrap;background:#fafafa}
+.th-tier1{background:#1a3550;color:#90caf9}
+.th-tier2{background:#1a3a1a;color:#a5d6a7}
+.th-tier3{background:#3a2012;color:#ffcc80}
+.th-term{background:#2a1f3a;color:#ce93d8}
+.th-d{background:#1e3a3a;color:#6ee7b7}
+.th-sub-a{background:#1d3d5a;color:#90caf9}
+.th-sub-b{background:#1d3d5a;color:#a5d6a7}
+.th-sub-g{background:#1d3d5a;color:#ffcc80}
+.th-sub-term{background:#2a1f3a;color:#ce93d8}
+.th-sub-d{background:#1e3a3a;color:#6ee7b7}
+.th-sep{border-left:2px solid #9ca3af!important}
+.cell-on{background:#dcfce7;color:#166534;font-weight:700}
+.cell-off{background:#f9fafb;color:#e5e7eb}
+
+/* WARN */
+.warn-box{font-size:.78rem;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:.55rem .9rem;margin:.5rem 0}
+.info-box{font-size:.78rem;color:#166534;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:.55rem .9rem;margin-top:1rem}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">📍</div>
+    <h1>Postal Rule Lookup</h1>
+    <p>CarShield Internal Tool</p>
+    <input type="password" id="pwInput" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()"/>
+    <button class="login-submit" onclick="doLogin()">Sign In</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden;display:none">
+
+  <div class="header">
+    <div class="header-left">
+      <h1>📍 Postal Rule Lookup</h1>
+      <p>Vehicle class coverage restrictions across all active postal rules</p>
+    </div>
+    <div class="mode-tabs">
+      <button class="mode-tab active" id="tabUpload" onclick="switchMode('upload')">⬆ Upload Data</button>
+      <button class="mode-tab" id="tabZip" onclick="switchMode('zip')">🔍 ZIP Search</button>
+      <button class="mode-tab" id="tabRule" onclick="switchMode('rule')">📋 Browse by Rule</button>
+      <button class="mode-tab" id="tabCov" onclick="switchMode('cov')">🏷 Coverage Codes</button>
+    </div>
+  </div>
+
+  <!-- UPLOAD VIEW -->
+  <div class="view upload-view active" id="uploadView">
+
+    <div class="upload-section">
+      <h2>Step 1 — Upload Postal Rule Files (CZC)</h2>
+      <p>Upload one or more CZC XLS files exported from Forte. Each file represents one postal rule. You can upload them one at a time — they will accumulate. Currently loaded rules are shown below.</p>
+      <div class="drop-zone" id="czc-drop" ondragover="dragOver(event,'czc-drop')" ondragleave="dragLeave('czc-drop')" ondrop="dropFile(event,'czc')">
+        <div class="drop-icon">📂</div>
+        <p><strong>Drag & drop CZC XLS files here</strong><br>or click to browse</p>
+        <input type="file" id="czc-input" accept=".xls,.xlsx" multiple style="display:none" onchange="handleFiles(this.files,'czc')"/>
+      </div>
+      <div class="upload-btn-row">
+        <button class="upload-btn" onclick="document.getElementById('czc-input').click()">Browse Files</button>
+        <span class="upload-status" id="czc-status"></span>
+        <button class="clear-btn" onclick="clearData('czc')">Clear All Rules</button>
+      </div>
+      <div class="loaded-list" id="czc-loaded"></div>
+    </div>
+
+    <div class="upload-section">
+      <h2>Step 2 — Upload Rate Assignments (Coverage Codes)</h2>
+      <p>Upload the Rate Assignments XLSX exported from Forte. Must include the <strong>Postal Rule</strong> column as the last column on the right. This replaces any previously loaded coverage data.</p>
+      <div class="drop-zone" id="cov-drop" ondragover="dragOver(event,'cov-drop')" ondragleave="dragLeave('cov-drop')" ondrop="dropFile(event,'cov')">
+        <div class="drop-icon">📊</div>
+        <p><strong>Drag & drop Rate Assignments XLSX here</strong><br>or click to browse</p>
+        <input type="file" id="cov-input" accept=".xlsx,.xls" style="display:none" onchange="handleFiles(this.files,'cov')"/>
+      </div>
+      <div class="upload-btn-row">
+        <button class="upload-btn" onclick="document.getElementById('cov-input').click()">Browse File</button>
+        <span class="upload-status" id="cov-status"></span>
+        <button class="clear-btn" onclick="clearData('cov')">Clear Coverage Data</button>
+      </div>
+      <div class="loaded-list" id="cov-loaded"></div>
+    </div>
+
+    <div id="ready-banner" style="display:none" class="info-box">
+      ✅ Data loaded — use the tabs above to browse rules, search by ZIP, or explore coverage codes.
+    </div>
+
+  </div>
+
+  <!-- ZIP VIEW -->
+  <div class="view zip-view" id="zipView">
+    <div class="search-row">
+      <input type="text" id="zipInput" placeholder="Enter ZIP code..." maxlength="5" oninput="this.value=this.value.replace(/\D/g,'')" onkeydown="if(event.key==='Enter')doZipSearch()"/>
+      <button onclick="doZipSearch()">Search</button>
+    </div>
+    <div id="zipResult"></div>
+  </div>
+
+  <!-- RULE BROWSER -->
+  <div class="view" id="ruleBrowserView">
+    <div class="browser">
+      <div class="sidebar" id="ruleSidebar">
+        <div class="sidebar-label">All Postal Rules</div>
+        <div class="no-data" style="margin:.5rem;font-size:.75rem">Upload CZC files first</div>
+      </div>
+      <div class="detail" id="ruleDetail">
+        <div class="detail-placeholder"><div class="icon">📋</div><p>Select a postal rule from the left</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COV BROWSER -->
+  <div class="view" id="covBrowserView">
+    <div class="browser">
+      <div class="sidebar" id="covSidebar">
+        <div class="sidebar-label">Coverage Codes</div>
+        <div class="no-data" style="margin:.5rem;font-size:.75rem">Upload Rate Assignments first</div>
+      </div>
+      <div class="detail" id="covDetail">
+        <div class="detail-placeholder"><div class="icon">🏷</div><p>Select a coverage code from the left</p></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+// ============================================================
+// AUTH
+// ============================================================
+const SESSION_KEY='prl_auth_v1';
+const PW='Mattaline2026!';
+function doLogin(){
+  const pw=document.getElementById('pwInput').value;
+  if(pw===PW){
+    sessionStorage.setItem(SESSION_KEY,'1');
+    document.getElementById('loginScreen').style.display='none';
+    const app=document.getElementById('app');
+    app.style.display='flex';
+    app.style.flexDirection='column';
+    loadFromSession();
+  }else{
+    document.getElementById('loginError').textContent='Incorrect password.';
+    document.getElementById('pwInput').value='';
+  }
+}
+document.getElementById('pwInput').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+if(sessionStorage.getItem(SESSION_KEY)==='1'){
+  document.getElementById('loginScreen').style.display='none';
+  const app=document.getElementById('app');
+  app.style.display='flex';
+  app.style.flexDirection='column';
+}
+
+// ============================================================
+// STATE
+// ============================================================
+// DB.rules: { ruleKey: { label, zips:[{zip,city,state,vals:[]}], cols:[] } }
+// DB.codes: { code: { code, admin, desc, internalDesc, status, postalRule, maxOdom } }
+const DB={ rules:{}, codes:{} };
+let activeRule=null, activeCov=null;
+
+// ============================================================
+// SESSION PERSISTENCE
+// ============================================================
+function saveToSession(){
+  try{
+    sessionStorage.setItem('prl_rules', JSON.stringify(DB.rules));
+    sessionStorage.setItem('prl_codes', JSON.stringify(DB.codes));
+  }catch(e){}
+}
+function loadFromSession(){
+  try{
+    const r=sessionStorage.getItem('prl_rules');
+    const c=sessionStorage.getItem('prl_codes');
+    if(r){ Object.assign(DB.rules, JSON.parse(r)); }
+    if(c){ Object.assign(DB.codes, JSON.parse(c)); }
+    refreshLoadedUI();
+    checkReady();
+  }catch(e){}
+}
+
+// ============================================================
+// UPLOAD / DROP
+// ============================================================
+function dragOver(e,id){e.preventDefault();document.getElementById(id).classList.add('drag-over');}
+function dragLeave(id){document.getElementById(id).classList.remove('drag-over');}
+function dropFile(e,type){
+  e.preventDefault();
+  dragLeave(type+'-drop');
+  handleFiles(e.dataTransfer.files, type);
+}
+function handleFiles(files, type){
+  Array.from(files).forEach(f=>{
+    if(type==='czc') parseCZC(f);
+    else parseCoverage(f);
+  });
+}
+
+function parseCZC(file){
+  setStatus('czc','Reading '+file.name+'…','');
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      // Detect format by magic bytes
+      const arr=new Uint8Array(e.target.result);
+      const isBinary=(arr[0]===0xD0&&arr[1]===0xCF); // OLE2 binary xls
+      if(isBinary){
+        parseCZC_binary(file.name, e.target.result);
+      } else {
+        // SpreadsheetML XML
+        const text=new TextDecoder('utf-8').decode(arr);
+        parseCZC_xml(file.name, text);
+      }
+    }catch(err){
+      setStatus('czc','Error reading '+file.name+': '+err.message,'err');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseCZC_binary(filename, arrayBuffer){
+  const wb=XLSX.read(arrayBuffer,{type:'array'});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+  // Find subtitle row (contains rule name) and header row
+  // Row 0: "Forte Data Systems", Row 1: "Zip MaxOdom Report-RULENAME", Row 2: headers, Row 3+: data
+  const subtitle=String(raw[1]?raw[1][0]||'':'');
+  const ruleLabel=subtitle.replace(/^Zip MaxOdom Report-?/i,'').trim()||filename.replace(/-CZC\.xls.*/i,'');
+  const ruleKey=ruleLabel.replace(/\./g,'_');
+  const hdrs=(raw[2]||[]).map(h=>String(h).trim());
+  const classCols=hdrs.slice(5);
+  const zips=[];
+  for(let i=3;i<raw.length;i++){
+    const r=raw[i];
+    if(!r[1])continue;
+    const zip=String(r[1]).trim().padStart(5,'0');
+    const state=String(r[2]||'').trim();
+    const city=titleCase(String(r[3]||'').trim());
+    const allVal=parseFloat(r[4])||0;
+    const vals=r.slice(5).map(v=>parseFloat(v)||0);
+    zips.push({zip,state,city,allVal,vals});
+  }
+  if(!zips.length)throw new Error('No zip data found');
+  DB.rules[ruleKey]={label:ruleLabel,cols:classCols,zips};
+  saveToSession();
+  refreshLoadedUI();
+  checkReady();
+  setStatus('czc','✓ Loaded '+ruleLabel+' ('+zips.length+' zips)','ok');
+  rebuildRuleSidebar();
+}
+
+function parseCZC_xml(filename, text){
+  const parser=new DOMParser();
+  const doc=parser.parseFromString(text,'text/xml');
+  const ns='urn:schemas-microsoft-com:office:spreadsheet';
+  const rows=[...doc.getElementsByTagNameNS(ns,'Row')];
+  if(rows.length<3)throw new Error('Unexpected file format');
+  const subtitle=getCellText(rows[1],ns);
+  const ruleLabel=subtitle.replace(/^Zip MaxOdom Report-?/i,'').trim()||filename.replace(/-CZC\.xls.*/i,'');
+  const ruleKey=ruleLabel.replace(/\./g,'_');
+  const hdrs=getRowCells(rows[2],ns);
+  const classCols=hdrs.slice(5);
+  const zips=[];
+  for(let i=3;i<rows.length;i++){
+    const cells=getRowCells(rows[i],ns);
+    if(!cells[1])continue;
+    const zip=(cells[1]||'').trim().padStart(5,'0');
+    const state=(cells[2]||'').trim();
+    const city=titleCase((cells[3]||'').trim());
+    const allVal=parseFloat(cells[4])||0;
+    const vals=cells.slice(5).map(v=>parseFloat(v)||0);
+    zips.push({zip,state,city,allVal,vals});
+  }
+  if(!zips.length)throw new Error('No zip data found');
+  DB.rules[ruleKey]={label:ruleLabel,cols:classCols,zips};
+  saveToSession();
+  refreshLoadedUI();
+  checkReady();
+  setStatus('czc','✓ Loaded '+ruleLabel+' ('+zips.length+' zips)','ok');
+  rebuildRuleSidebar();
+}
+
+function getCellText(row,ns){
+  const cells=[...row.getElementsByTagNameNS(ns,'Cell')];
+  if(!cells.length)return'';
+  const data=cells[0].getElementsByTagNameNS(ns,'Data')[0];
+  return data?data.textContent:'';
+}
+function getRowCells(row,ns){
+  const cells=[...row.getElementsByTagNameNS(ns,'Cell')];
+  const out=[];
+  let idx=0;
+  cells.forEach(cell=>{
+    const si=cell.getAttribute('ss:Index')||cell.getAttributeNS('urn:schemas-microsoft-com:office:spreadsheet','Index');
+    if(si) idx=parseInt(si)-1;
+    const data=cell.getElementsByTagNameNS(ns,'Data')[0];
+    out[idx]=data?data.textContent:'';
+    idx++;
+  });
+  return out;
+}
+
+function parseCoverage(file){
+  setStatus('cov','Reading '+file.name+'…','');
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      // Find header row (contains "Code")
+      let hdrIdx=raw.findIndex(r=>r.some(c=>String(c).trim()==='Code'));
+      if(hdrIdx<0)throw new Error('Cannot find header row with "Code" column');
+      const hdrs=raw[hdrIdx].map(h=>String(h).trim());
+      const ci={
+        code:hdrs.indexOf('Code'),
+        admin:hdrs.indexOf('Admin'),
+        desc:hdrs.indexOf('Description'),
+        internal:hdrs.indexOf('Internal Desc'),
+        status:hdrs.indexOf('Status'),
+        maxOdom:hdrs.indexOf('MaxOdom'),
+        postalRule:hdrs.lastIndexOf('Postal Rule'), // last column
+      };
+      // fallback: last column is postal rule
+      if(ci.postalRule<0) ci.postalRule=hdrs.length-1;
+
+      const newCodes={};
+      for(let i=hdrIdx+1;i<raw.length;i++){
+        const r=raw[i];
+        const code=String(r[ci.code]||'').trim();
+        if(!code)continue;
+        const pr=String(r[ci.postalRule]||'').trim();
+        newCodes[code]={
+          code,
+          admin:String(r[ci.admin]||'').trim(),
+          desc:String(r[ci.desc]||'').trim(),
+          internalDesc:String(r[ci.internal]||'').trim(),
+          status:String(r[ci.status]||'').trim(),
+          maxOdom:parseFloat(r[ci.maxOdom])||null,
+          postalRule:(pr&&pr!=='0'&&pr!=='0\n')?pr:null,
+        };
+      }
+      DB.codes=newCodes;
+      saveToSession();
+      refreshLoadedUI();
+      checkReady();
+      rebuildCovSidebar();
+      rebuildRuleSidebar(); // refresh rule sidebar too (bold/gray logic)
+      setStatus('cov','✓ Loaded '+Object.keys(newCodes).length+' coverage codes','ok');
+    }catch(err){
+      setStatus('cov','Error: '+err.message,'err');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function clearData(type){
+  if(type==='czc'){DB.rules={};sessionStorage.removeItem('prl_rules');}
+  else{DB.codes={};sessionStorage.removeItem('prl_codes');}
+  refreshLoadedUI();
+  checkReady();
+  rebuildRuleSidebar();
+  rebuildCovSidebar();
+}
+function setStatus(type,msg,cls){
+  const el=document.getElementById(type+'-status');
+  el.textContent=msg;el.className='upload-status'+(cls?' '+cls:'');
+}
+function refreshLoadedUI(){
+  // CZC
+  const czc=document.getElementById('czc-loaded');
+  const rkeys=Object.keys(DB.rules);
+  czc.innerHTML=rkeys.length?rkeys.map(k=>`<span class="loaded-tag">${DB.rules[k].label}</span>`).join(''):'';
+  // COV
+  const cov=document.getElementById('cov-loaded');
+  const ckeys=Object.keys(DB.codes);
+  cov.innerHTML=ckeys.length?`<span class="loaded-tag cov-tag">${ckeys.length} coverage codes loaded</span>`:'';
+}
+function checkReady(){
+  const hasRules=Object.keys(DB.rules).length>0;
+  const hasCodes=Object.keys(DB.codes).length>0;
+  document.getElementById('ready-banner').style.display=(hasRules||hasCodes)?'block':'none';
+}
+
+// ============================================================
+// MODE SWITCHING
+// ============================================================
+const VIEWS={upload:'uploadView',zip:'zipView',rule:'ruleBrowserView',cov:'covBrowserView'};
+const TABS={upload:'tabUpload',zip:'tabZip',rule:'tabRule',cov:'tabCov'};
+function switchMode(mode){
+  Object.keys(VIEWS).forEach(m=>{
+    document.getElementById(VIEWS[m]).classList.toggle('active',m===mode);
+    document.getElementById(TABS[m]).classList.toggle('active',m===mode);
+  });
+  if(mode==='rule') rebuildRuleSidebar();
+  if(mode==='cov') rebuildCovSidebar();
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function titleCase(s){return s.replace(/\w\S*/g,t=>t.charAt(0).toUpperCase()+t.slice(1).toLowerCase());}
+
+function ivClass(v){
+  const n=parseFloat(v);
+  if(n===1||n===-1)return'off';
+  if(n>1)return'limit';
+  return'ok';
+}
+function ivLabel(v){
+  const n=parseFloat(v);
+  if(n===1||n===-1)return'Off';
+  if(n>1)return n.toLocaleString();
+  return'';
+}
+
+function allPill(allVal, vals){
+  // allVal is the ALL column — if non-zero it applies to every class
+  const allType=ivClass(allVal);
+  if(allType==='off')return`<span class="pill pill-off">⊘ All classes off</span>`;
+  if(allType==='limit')return`<span class="pill pill-limit">⚠ All classes max ${parseFloat(allVal).toLocaleString()} mi</span>`;
+  // otherwise check individual class columns
+  const anyOff=vals.some(v=>ivClass(v)==='off');
+  const anyLim=vals.some(v=>ivClass(v)==='limit');
+  if(anyOff&&anyLim)return`<span class="pill pill-off">${vals.filter(v=>ivClass(v)==='off').length} off, ${vals.filter(v=>ivClass(v)==='limit').length} limited — see table</span>`;
+  if(anyOff)return`<span class="pill pill-off">${vals.filter(v=>ivClass(v)==='off').length} class(es) off — see table</span>`;
+  if(anyLim)return`<span class="pill pill-limit">${vals.filter(v=>ivClass(v)==='limit').length} class(es) limited — see table</span>`;
+  return`<span class="pill pill-ok">✓ No restrictions</span>`;
+}
+
+function clsTbl(cols, vals){
+  const ths=cols.map(c=>`<th>${c}</th>`).join('');
+  const tds=vals.map((v,i)=>{
+    const type=ivClass(v);
+    const lbl=ivLabel(v);
+    return`<td class="${type==='off'?'val-off':type==='limit'?'val-lim':''}">${lbl}</td>`;
+  }).join('');
+  return`<div class="tbl-wrap"><table class="cls-tbl"><thead><tr>${ths}</tr></thead><tbody><tr>${tds}</tr></tbody></table></div>`;
+}
+
+function rowRestriction(allVal, vals, cols){
+  const allType=ivClass(allVal);
+  if(allType==='off')return'All classes off';
+  if(allType==='limit')return`All classes max ${parseFloat(allVal).toLocaleString()} mi`;
+  const offCols=vals.map((v,i)=>ivClass(v)==='off'?cols[i]:null).filter(Boolean);
+  const limCols=vals.map((v,i)=>ivClass(v)==='limit'?`${cols[i]} max ${parseFloat(vals[i]).toLocaleString()}`:null).filter(Boolean);
+  if(!offCols.length&&!limCols.length)return'No restriction';
+  const parts=[];
+  if(offCols.length) parts.push(offCols.join(', ')+' off');
+  if(limCols.length) parts.push(limCols.join(', '));
+  return parts.join(' · ');
+}
+
+// ============================================================
+// TIER GRID
+// ============================================================
+const ADMIN_TR={
+  // Tier 1
+  'M2M1A':{t:1,r:'A'},'M2ML1A':{t:1,r:'A'},
+  'M2M1B':{t:1,r:'B'},'M2ML1B':{t:1,r:'B'},
+  'M2M1G':{t:1,r:'G'},'M2ML1G':{t:1,r:'G'},
+  // Tier 2
+  'M2M2A':{t:2,r:'A'},'M2ML2A':{t:2,r:'A'},
+  'M2M2B':{t:2,r:'B'},'M2ML2B':{t:2,r:'B'},
+  'M2M2G':{t:2,r:'G'},'M2ML2G':{t:2,r:'G'},
+  // Tier 3
+  'M2M3A':{t:3,r:'A'},'M2ML3A':{t:3,r:'A'},
+  'M2M3B':{t:3,r:'B'},'M2ML3B':{t:3,r:'B'},
+  'M2M3G':{t:3,r:'G'},'M2ML3G':{t:3,r:'G'},
+  // No-tier A-rate (Aluminum/EV primary)
+  'M2M':{t:0,r:'A'},'M2ML':{t:0,r:'A'},
+  // No-tier B-rate
+  'M2MB':{t:0,r:'B'},'M2MBL':{t:0,r:'B'},
+  // D-rate
+  'M2MD':{t:0,r:'D'},
+  // TRM (non-Florida term contracts only — F suffix = Florida, skip)
+  'TRM':{t:0,r:'T'},'TRML':{t:0,r:'T'},
+  // Florida variants (F suffix) — excluded from grid
+  // M2MF, M2MLF, M2MBF, M2MBLF, M2MGF, M2MGLF, TRMF, TRMLF → not in map
+};
+const PROD_ORDER=['Diamond','Platinum','Gold Select','Silver','Aluminum','EV'];
+function prodFromDesc(desc){
+  if(!desc)return null;
+  const d=desc.toLowerCase();
+  if(d.includes('electric vehicle'))return'EV';
+  if(d.includes('aluminum'))return'Aluminum';
+  if(d.includes('diamond'))return'Diamond';
+  if(d.includes('gold select')||d.includes('powertrain gold select'))return'Gold Select';
+  if(d.includes('platinum'))return'Platinum';
+  if(d.includes('powertrain')||d.includes('silver'))return'Silver';
+  return null;
+}
+
+function buildTierGrid(ruleCodes){
+  const enabled=new Set();
+  ruleCodes.forEach(code=>{
+    const info=DB.codes[code];
+    if(!info||info.status!=='Enabled')return;
+    const tr=ADMIN_TR[info.admin];
+    if(!tr)return;
+    const prod=prodFromDesc(info.desc)||prodFromDesc(info.internalDesc);
+    if(!prod)return;
+    enabled.add(`${tr.t}|${tr.r}|${prod}`);
+  });
+  if(enabled.size===0)return'';
+
+  const hasTier=t=>PROD_ORDER.some(p=>['A','B','G'].some(r=>enabled.has(`${t}|${r}|${p}`)));
+  const has0=r=>PROD_ORDER.some(p=>enabled.has(`0|${r}|${p}`));
+
+  const cols=[];
+  [1,2,3].forEach(t=>{
+    if(!hasTier(t))return;
+    const first=cols.length===0;
+    ['A','B','G'].forEach((r,i)=>{
+      cols.push({label:r,thCls:`th-sub-${r.toLowerCase()}`,tier:t,rate:r,sep:first&&i===0||(!first&&i===0)});
+    });
+  });
+  ['T','A','B','D'].forEach(r=>{
+    if(!has0(r))return;
+    const lbl=r==='T'?'TRM':r==='D'?'D':r;
+    cols.push({label:lbl,thCls:r==='T'?'th-sub-term':r==='D'?'th-sub-d':`th-sub-${r.toLowerCase()}`,tier:0,rate:r,sep:cols.length>0});
+  });
+  if(!cols.length)return'';
+
+  // Header row 1: tier spans
+  let spanRow='<tr><th style="background:#f8fafc"></th>';
+  let i=0;
+  while(i<cols.length){
+    const c=cols[i];
+    if(c.tier>=1){
+      let span=0,j=i;
+      while(j<cols.length&&cols[j].tier===c.tier){span++;j++;}
+      const tcls=c.tier===1?'th-tier1':c.tier===2?'th-tier2':'th-tier3';
+      const sep=c.sep?'th-sep':'';
+      spanRow+=`<th colspan="${span}" class="${tcls} ${sep}">Tier ${c.tier}</th>`;
+      i+=span;
+    }else{
+      // Each tier-0 rate type gets its own group header (TRM, D, A/B together, G)
+      const rate=c.rate;
+      let span=0,j=i;
+      while(j<cols.length&&cols[j].tier===0&&cols[j].rate===rate){span++;j++;}
+      const tcls=rate==='T'?'th-term':rate==='D'?'th-d':'th-tier1';
+      const lbl=rate==='T'?'TRM':rate==='D'?'Dealer':'Alum / EV';
+      const sep=c.sep?'th-sep':'';
+      spanRow+=`<th colspan="${span}" class="${tcls} ${sep}">${lbl}</th>`;
+      i+=span;
+    }
+  }
+  spanRow+='</tr>';
+
+  let subRow='<tr><th style="background:#f8fafc;font-size:.6rem;color:#9ca3af">Product</th>';
+  cols.forEach(c=>{subRow+=`<th class="${c.thCls}${c.sep?' th-sep':''}">${c.label}</th>`;});
+  subRow+='</tr>';
+
+  const dataRows=PROD_ORDER.map(prod=>{
+    if(!cols.some(c=>enabled.has(`${c.tier}|${c.rate}|${prod}`)))return'';
+    let row=`<tr><td class="row-lbl">${prod}</td>`;
+    cols.forEach(c=>{
+      const on=enabled.has(`${c.tier}|${c.rate}|${prod}`);
+      row+=`<td class="${on?'cell-on':'cell-off'}${c.sep?' th-sep':''}">${on?'✓':'—'}</td>`;
+    });
+    return row+'</tr>';
+  }).join('');
+
+  return`<div class="tier-grid-wrap"><div class="tier-grid-head">Rate Coverage Grid</div><div class="tier-grid-inner"><table class="tier-tbl"><thead>${spanRow}${subRow}</thead><tbody>${dataRows}</tbody></table></div></div>`;
+}
+
+// Get codes attached to a rule key
+function getRuleCodes(ruleKey){
+  const label=DB.rules[ruleKey]?.label||ruleKey.replace(/_/g,'.');
+  return Object.values(DB.codes).filter(c=>{
+    if(!c.postalRule)return false;
+    const ck=c.postalRule.replace(/\./g,'_');
+    return ck===ruleKey||c.postalRule===label||c.postalRule===ruleKey;
+  });
+}
+
+// ============================================================
+// RULE BROWSER
+// ============================================================
+function rebuildRuleSidebar(){
+  const sb=document.getElementById('ruleSidebar');
+  const rules=Object.keys(DB.rules);
+  if(!rules.length){
+    sb.innerHTML='<div class="sidebar-label">All Postal Rules</div><div class="no-data" style="margin:.5rem;font-size:.75rem">Upload CZC files first</div>';
+    return;
+  }
+  const sorted=rules.sort((a,b)=>(DB.rules[a].label).localeCompare(DB.rules[b].label));
+  sb.innerHTML='<div class="sidebar-label">All Postal Rules</div>'
+    +sorted.map(rk=>{
+      const r=DB.rules[rk];
+      const codes=getRuleCodes(rk);
+      const hasEnabled=codes.some(c=>c.status==='Enabled');
+      const hasCodes=codes.length>0;
+      const nameStyle=hasEnabled?'font-weight:700;color:#111827':!hasCodes?'color:#9ca3af':'';
+      const subStyle=!hasCodes?'color:#d1d5db':'';
+      return`<button class="side-btn${activeRule===rk?' active':''}" id="rbtn-${rk}" onclick="selectRule('${rk}')"><span style="${nameStyle}">${r.label}</span><span class="sub" style="${subStyle}">${r.zips.length} zips</span></button>`;
+    }).join('');
+}
+
+function selectRule(rk){
+  if(activeRule){const p=document.getElementById('rbtn-'+activeRule);if(p)p.classList.remove('active');}
+  activeRule=rk;
+  const btn=document.getElementById('rbtn-'+rk);if(btn)btn.classList.add('active');
+  const r=DB.rules[rk];
+  if(!r)return;
+
+  const firstZip=r.zips[0];
+  const allVal=firstZip.allVal||0;
+  const vals=firstZip.vals;
+  const pat0=allVal+'|'+vals.join(',');
+  const mixed=r.zips.some(z=>((z.allVal||0)+'|'+z.vals.join(','))!==pat0);
+
+  // For the pill: if mixed, only call out classes off in ALL zips
+  let pillHtml;
+  let mixedNote='';
+  if(mixed){
+    const av0=allVal;
+    const allClassesOff=ivClass(av0)==='off';
+    if(allClassesOff){
+      pillHtml=`<span class="pill pill-off">⊘ All classes off</span>`;
+    } else {
+      // Classes off in every ZIP
+      const alwaysOff=r.cols.filter((_,ci)=>r.zips.every(z=>{
+        if(ivClass(z.allVal||0)==='off')return true;
+        return ivClass(z.vals[ci])==='off';
+      }));
+      // Classes off in some (but not all) ZIPs
+      const sometimesOff=r.cols.filter((col,ci)=>{
+        if(alwaysOff.includes(col))return false;
+        return r.zips.some(z=>ivClass(z.vals[ci])==='off');
+      });
+      const alwaysLim=r.cols.filter((_,ci)=>r.zips.every(z=>ivClass(z.vals[ci])==='limit'));
+
+      const parts=[];
+      if(alwaysOff.length) parts.push(alwaysOff.map(c=>`${c}*`).join(', ')+' off');
+      if(alwaysLim.length) parts.push(alwaysLim.map(c=>`${c}*`).join(', ')+' limited');
+
+      if(parts.length){
+        pillHtml=`<span class="pill pill-off">⚠ ${parts.join(' · ')} — see table</span>`;
+      } else {
+        pillHtml=`<span class="pill pill-limit">⚠ Varies by ZIP — see table</span>`;
+      }
+
+      if(sometimesOff.length){
+        mixedNote=`<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:.55rem 1rem;margin:.5rem 1.25rem;font-size:.78rem;color:#92400e">
+          <strong>* Applies to all ZIPs in this rule.</strong> Classes ${sometimesOff.join(', ')} are off in some ZIPs only — check the ZIP table below for details.
+        </div>`;
+      } else if(alwaysOff.length||alwaysLim.length){
+        mixedNote=`<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:.55rem 1rem;margin:.5rem 1.25rem;font-size:.78rem;color:#92400e">
+          <strong>* Applies to all ZIPs in this rule.</strong> Other classes may also vary by ZIP — check the ZIP table below.
+        </div>`;
+      } else {
+        mixedNote=`<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:.55rem 1rem;margin:.5rem 1.25rem;font-size:.78rem;color:#92400e">
+          Restrictions vary by ZIP in this rule — the table below shows a representative ZIP. Check the ZIP table for per-ZIP details.
+        </div>`;
+      }
+    }
+  } else {
+    pillHtml=allPill(allVal,vals);
+  }
+  const codes=getRuleCodes(rk);
+  const codeKeys=codes.map(c=>c.code);
+
+  const restrictBlock=`<div class="card" style="margin-top:0;border-radius:0 0 12px 12px;border-top:none">
+    <div class="all-row"><span class="all-lbl">ALL Classes</span>${pillHtml}</div>
+    ${clsTbl(r.cols,vals)}
+    ${mixedNote}
+    <div class="legend-row">
+      <div class="legend-item"><div class="dot dot-off"></div>Off (1 or −1)</div>
+      <div class="legend-item"><div class="dot dot-lim"></div>Max odometer (miles)</div>
+      <div class="legend-item"><div class="dot dot-ok"></div>Blank = no restriction</div>
+    </div>
+  </div>`;
+
+  const tierGrid=buildTierGrid(codeKeys);
+
+  const codesBlock=codes.length
+    ?`<div class="tbl-card"><div class="tbl-card-head"><h3>Coverage Codes (${codes.length})</h3></div><div class="codes-grid-lg">${codes.map(c=>`<div class="code-item" onclick="jumpToCov('${c.code}')"><span class="code-name">${c.code}</span><span class="code-desc" title="${c.desc}">${c.desc}</span><span class="badge-${c.status.toLowerCase()}">${c.status}</span></div>`).join('')}</div></div>`
+    :`<div class="no-data" style="margin-top:1rem">No coverage codes linked to this postal rule.</div>`;
+
+  const zipRows=r.zips.map(z=>`<tr onclick="jumpToZip('${z.zip}')"><td class="mono">${z.zip}</td><td>${z.city}</td><td>${z.state}</td><td>${rowRestriction(z.allVal||0,z.vals,r.cols)}</td></tr>`).join('');
+  const zipTbl=`<div class="tbl-card"><div class="tbl-card-head"><h3>All Zips (${r.zips.length})</h3><input class="filter-input" placeholder="Filter zip or city..." oninput="filterTbody('ztb-${rk}',this.value)"/></div><div class="tbl-scroll"><table class="list"><thead><tr><th>ZIP</th><th>City</th><th>State</th><th>Restriction</th></tr></thead><tbody id="ztb-${rk}">${zipRows}</tbody></table></div></div>`;
+
+  document.getElementById('ruleDetail').innerHTML=`
+    <div class="result-head" style="border-radius:12px 12px 0 0;border-bottom:none">
+      <div><h2>${r.label}</h2><p>Postal Rule · ${r.zips.length} zip codes${codes.length?' · '+codes.length+' coverage codes':' · No linked coverage codes'}</p></div>
+    </div>
+    ${restrictBlock}${tierGrid}${codesBlock}${zipTbl}`;
+  document.getElementById('ruleDetail').scrollTop=0;
+}
+
+// ============================================================
+// COVERAGE CODE BROWSER
+// ============================================================
+function rebuildCovSidebar(){
+  const sb=document.getElementById('covSidebar');
+  const codes=Object.values(DB.codes);
+  if(!codes.length){
+    sb.innerHTML='<div class="sidebar-label">Coverage Codes</div><div class="no-data" style="margin:.5rem;font-size:.75rem">Upload Rate Assignments first</div>';
+    return;
+  }
+  const withRule=codes.filter(c=>c.postalRule).sort((a,b)=>a.code.localeCompare(b.code));
+  const noRule=codes.filter(c=>!c.postalRule).sort((a,b)=>a.code.localeCompare(b.code));
+  const all=[...withRule,...noRule];
+  const makeBtn=c=>{
+    const hasRule=!!c.postalRule;
+    const ns=hasRule?'font-family:monospace;font-size:.78rem;font-weight:700;color:#111827':'font-family:monospace;font-size:.78rem;color:#9ca3af';
+    const ss=hasRule?'':'color:#d1d5db';
+    return`<button class="side-btn${activeCov===c.code?' active':''}" id="cbtn-${c.code}" onclick="selectCov('${c.code}')"><span style="${ns}">${c.code}</span><span class="sub" style="${ss}">${c.postalRule||'No rule'}</span></button>`;
+  };
+  sb.innerHTML=`<div class="sidebar-label">Coverage Codes (${all.length})</div>`
+    +`<div class="side-search"><input placeholder="Search codes..." oninput="filterCovSidebar(this.value)"/></div>`
+    +`<div id="covSideList">${all.map(makeBtn).join('')}</div>`;
+}
+
+function filterCovSidebar(q){
+  const list=document.getElementById('covSideList');
+  if(!list)return;
+  q=q.toLowerCase();
+  Array.from(list.children).forEach(b=>{b.style.display=b.textContent.toLowerCase().includes(q)?'':'none';});
+}
+
+function selectCov(code){
+  if(activeCov){const p=document.getElementById('cbtn-'+activeCov);if(p)p.classList.remove('active');}
+  activeCov=code;
+  const btn=document.getElementById('cbtn-'+code);if(btn)btn.classList.add('active');
+  const c=DB.codes[code];
+  if(!c){document.getElementById('covDetail').innerHTML='<div class="detail-placeholder"><p>Code not found</p></div>';return;}
+
+  const prKey=c.postalRule?c.postalRule.replace(/\./g,'_'):null;
+  const r=prKey?DB.rules[prKey]:null;
+  const statusBadge=`<span class="badge-${c.status.toLowerCase()}">${c.status}</span>`;
+
+  let ruleBlock='';
+  if(r){
+    const firstZip=r.zips[0];
+    const allVal=firstZip.allVal||0;
+    const vals=firstZip.vals;
+    ruleBlock=`<div class="card">
+      <div class="card-head"><span class="card-title">Postal Rule: ${r.label}</span><button class="toggle-btn" onclick="switchMode('rule');setTimeout(()=>selectRule('${prKey}'),50)">View full rule ↗</button></div>
+      <div class="all-row"><span class="all-lbl">ALL Classes</span>${allPill(allVal,vals)}</div>
+      ${clsTbl(r.cols,vals)}
+      <div class="legend-row">
+        <div class="legend-item"><div class="dot dot-off"></div>Off</div>
+        <div class="legend-item"><div class="dot dot-lim"></div>Max odometer</div>
+        <div class="legend-item"><div class="dot dot-ok"></div>No restriction</div>
+      </div>
+    </div>`;
+    const zipRows=r.zips.map(z=>`<tr onclick="jumpToZip('${z.zip}')"><td class="mono">${z.zip}</td><td>${z.city}</td><td>${z.state}</td><td>${rowRestriction(z.allVal||0,z.vals,r.cols)}</td></tr>`).join('');
+    ruleBlock+=`<div class="tbl-card"><div class="tbl-card-head"><h3>Affected ZIPs — ${r.label} (${r.zips.length})</h3><input class="filter-input" placeholder="Filter zip or city..." oninput="filterTbody('cztb-${code}',this.value)"/></div><div class="tbl-scroll"><table class="list"><thead><tr><th>ZIP</th><th>City</th><th>State</th><th>Restriction</th></tr></thead><tbody id="cztb-${code}">${zipRows}</tbody></table></div></div>`;
+  }else{
+    ruleBlock=`<div class="info-box">✅ No postal rule — available in all ZIP codes without restriction.</div>`;
+  }
+
+  document.getElementById('covDetail').innerHTML=`
+    <div class="result-head" style="border-radius:12px 12px 0 0;border-bottom:none">
+      <div><h2 style="font-family:monospace">${c.code}</h2><p>${c.desc}</p></div>
+      <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+        ${statusBadge}
+        ${c.postalRule?`<span class="badge-rule">Postal Rule: ${c.postalRule}</span>`:''}
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;padding:.6rem 1.5rem;display:flex;gap:1.75rem;font-size:.8rem;color:#6b7280;flex-wrap:wrap;border-radius:0 0 ${c.postalRule?'0 0':'12px 12px'}">
+      <span>Admin: <strong style="color:#374151">${c.admin||'—'}</strong></span>
+      ${c.maxOdom?`<span>Max Odometer: <strong style="color:#374151">${c.maxOdom.toLocaleString()}</strong></span>`:''}
+      <span>Internal: <strong style="color:#374151">${c.internalDesc||'—'}</strong></span>
+    </div>
+    ${ruleBlock}`;
+  document.getElementById('covDetail').scrollTop=0;
+}
+
+// ============================================================
+// ZIP SEARCH
+// ============================================================
+function doZipSearch(){
+  const zip=(document.getElementById('zipInput').value||'').trim().padStart(5,'0');
+  if(zip.length!==5||isNaN(zip)){
+    document.getElementById('zipResult').innerHTML='<div class="no-data">Please enter a 5-digit ZIP code.</div>';
+    return;
+  }
+  const matches=[];
+  Object.keys(DB.rules).forEach(rk=>{
+    const r=DB.rules[rk];
+    const z=r.zips.find(z=>z.zip===zip);
+    if(z)matches.push({rk,r,z});
+  });
+  if(!matches.length){
+    document.getElementById('zipResult').innerHTML=`<div class="no-data">No postal rules found for ZIP <strong>${zip}</strong>.</div>`;
+    return;
+  }
+  const city=matches[0].z.city;
+  const state=matches[0].z.state;
+  const cards=matches.map(({rk,r,z})=>{
+    const allVal=z.allVal||0;
+    const vals=z.vals;
+    const codes=getRuleCodes(rk);
+    const codeKeys=codes.map(c=>c.code);
+    const tierGrid=buildTierGrid(codeKeys);
+    const codesHtml=codes.length
+      ?`<div class="tbl-card-head" style="padding:.7rem 1.25rem;background:#f8fafc;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb"><h3 style="font-size:.87rem;font-weight:700;color:#1e3a5f">Coverage Codes (${codes.length})</h3></div><div class="codes-grid-lg">${codes.map(c=>`<div class="code-item" onclick="jumpToCov('${c.code}')"><span class="code-name">${c.code}</span><span class="code-desc">${c.desc}</span><span class="badge-${c.status.toLowerCase()}">${c.status}</span></div>`).join('')}</div>`
+      :'';
+    return`<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;margin-top:.75rem;overflow:hidden">
+      <div style="padding:.85rem 1.25rem;background:#f8fafc;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
+        <span style="font-weight:700;color:#1e3a5f">${r.label}</span>
+        <button class="toggle-btn" onclick="switchMode('rule');setTimeout(()=>selectRule('${rk}'),50)">View full rule ↗</button>
+      </div>
+      <div class="all-row"><span class="all-lbl">ALL Classes</span>${allPill(allVal,vals)}</div>
+      ${clsTbl(r.cols,vals)}
+      <div class="legend-row">
+        <div class="legend-item"><div class="dot dot-off"></div>Off (1 or −1)</div>
+        <div class="legend-item"><div class="dot dot-lim"></div>Max odometer (miles)</div>
+        <div class="legend-item"><div class="dot dot-ok"></div>Blank = no restriction</div>
+      </div>
+      ${tierGrid}
+      ${codesHtml}
+    </div>`;
+  }).join('');
+
+  document.getElementById('zipResult').innerHTML=`
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px 12px 0 0;border-bottom:none;padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
+      <div><h2 style="font-size:1.5rem;font-weight:700;color:#111827">${zip}</h2><p style="font-size:.85rem;color:#6b7280">${city}, ${state}</p></div>
+      <span class="rule-count-badge">${matches.length} postal rule${matches.length>1?'s':''} active</span>
+    </div>
+    ${cards}`;
+}
+
+// ============================================================
+// CROSS-VIEW NAVIGATION
+// ============================================================
+function jumpToCov(code){
+  switchMode('cov');
+  rebuildCovSidebar();
+  setTimeout(()=>selectCov(code),50);
+}
+function jumpToZip(zip){
+  switchMode('zip');
+  document.getElementById('zipInput').value=zip;
+  doZipSearch();
+}
+function filterTbody(id,q){
+  const tb=document.getElementById(id);
+  if(!tb)return;
+  q=q.toLowerCase();
+  Array.from(tb.rows).forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(q)?'':'none';});
+}
+
+// Init
+if(sessionStorage.getItem(SESSION_KEY)==='1') loadFromSession();
+</script>
+</body>
+</html>
